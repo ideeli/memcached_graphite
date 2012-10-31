@@ -7,7 +7,7 @@ Gem::Specification.new do |s|
   s.version     = MemcachedGraphite::VERSION
   s.authors     = ["Aaron Brown"]
   s.email       = ["abrown@ideeli.com"]
-  s.homepage    = ""
+  s.homepage    = "https://github.com/ideeli/memcached_graphite"
   s.summary     = %q{Send memcached statistics to graphite/carbon}
   s.description = %q{Send memcached statistics to graphite/carbon}
 
