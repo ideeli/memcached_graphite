@@ -1,0 +1,90 @@
+#!/usr/bin/env ruby
+
+require 'pp'
+require 'logger'
+require 'optparse'
+require 'rubygems'
+require 'dalli'
+require 'graphite'
+require 'memcached_graphite'
+
+#def normalize_key (str)
+#  str.gsub(/\W+/,'_')
+#end
+
+def numeric?(object)
+  true if Float(object) rescue false
+end
+
+def format_hostname ( hostname, options )
+  hn = Hostname.new(hostname, :base_hostname => options[:base_hostname])
+  
+  options[:reverse_hostname] ? hn.reverse : hn.to_s
+end
+
+#format the stats in a way that graphite expects
+def format_stats ( allstats, options )
+  carbon_prefix = options[:carbon_prefix]
+  stats = {}
+  allstats.each do |server,server_stats|
+    server_split = server.split(':')
+    server_piece = sprintf("%s.port_%s", 
+                           format_hostname(server_split[0], options),
+                           server_split[1] || 11211 )
+
+    prefix = [carbon_prefix, server_piece].join('.')
+    stats.merge! server_stats.prefix_keys("#{prefix}.")
+  end
+
+# only return numeric values
+# & convert to floats
+  Hash[stats.map { |k,v| [k, v.to_f] if numeric? v }]
+end
+
+logger = Logger.new($stdout)
+logger.level = Logger::INFO
+
+options = { :memcached_servers => 'localhost:11211',
+            :carbon_server     => 'localhost:2003',
+            :carbon_prefix     => 'memcached',
+            :base_hostname     => nil,
+            :reverse_hostname  => false }
+
+opts = OptionParser.new
+opts.banner = "Usage #{$0} -m memcached:port -g graphite:port [OPTIONS]"
+opts.on("-m", "--memcached HOSTS", Array,  
+    "Comma separated list of memcached servers (server:port,server:port)" ) do |v|
+  options[:memcached_servers] = v
+end
+opts.on("-g", "--graphite HOST", String,  
+    "Graphite/Carbon host:port") do |v|
+  options[:carbon_server] = v
+end
+opts.on("-p", "--prefix PREFIX", String,  
+    "Graphite tree prefix (default: #{options[:carbon_prefix]})") do |v|
+  options[:carbon_prefix] = v
+end
+opts.on("-b", "--base REGEX", String, 
+    "Base hostname regular expression.",
+    "Will be stripped off from the hostname before sending to Graphite.") do |v|
+  options[:base_hostname] = v
+end
+opts.on("-r", "--reverse", 
+    "Reverse hostname (foo.bar.com becomes com.bar.foo)") do |v|
+  options[:reverse_hostname] = true
+end
+opts.on("-d", "--debug", "Turn on debug logging" ) do |v|
+  logger.level = Logger::DEBUG
+end
+opts.on("-h", "--help", "help" ) do |v|
+  puts opts
+  exit 1
+end
+opts.parse!
+
+Dalli.logger = logger
+dc = Dalli::Client.new options[:memcached_servers]
+g  = Graphite::Logger.new(options[:carbon_server], logger)
+
+stats = format_stats(dc.stats, options)
+g.log(Time.now.to_i, stats)
