@@ -99,8 +99,7 @@ options[:memcached_servers].each do |server|
   stats.merge! get_stats_slabs(host,port)
   stats = format_stats(stats, host, port, options)
 
-  pp stats
-#  g.log(Time.now.to_i, stats)
+  g.log(Time.now.to_i, stats)
 end
 
 
