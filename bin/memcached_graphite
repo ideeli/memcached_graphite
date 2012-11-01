@@ -22,6 +22,10 @@ def format_hostname ( hostname, options )
   options[:reverse_hostname] ? hn.reverse : hn.to_s
 end
 
+def get_stats_items (host, port)
+  Hash[MemcacheDo.exec('stats items').gsub(/^STAT items:(\d+):/,'STAT items_\1.').scan(/^STAT (.*?) (.*)\r$/)]
+end
+
 def get_stats_slabs (host, port)
   Hash[MemcacheDo.exec('stats slabs',host,port).gsub(/^STAT (\d+):/,'STAT slab_\1.').scan(/^STAT (.*?) (.*)\r$/)]
 end
@@ -97,9 +101,8 @@ options[:memcached_servers].each do |server|
 
   stats = get_stats(host,port)
   stats.merge! get_stats_slabs(host,port)
+  stats.merge! get_stats_items(host,port)
   stats = format_stats(stats, host, port, options)
 
   g.log(Time.now.to_i, stats)
 end
-
-
