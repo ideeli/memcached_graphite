@@ -20,7 +20,7 @@ Gem::Specification.new do |s|
 
   # specify any dependencies here; for example:
   # s.add_development_dependency "rspec"
-  s.add_runtime_dependency "dalli"
   s.add_runtime_dependency "graphite"
+  s.add_runtime_dependency "memcache_do"
   s.rubygems_version = '1.3.5'
 end

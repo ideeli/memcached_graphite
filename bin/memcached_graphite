@@ -4,7 +4,7 @@ require 'pp'
 require 'logger'
 require 'optparse'
 require 'rubygems'
-require 'dalli'
+require 'memcache_do'
 require 'graphite'
 require 'memcached_graphite'
 
@@ -22,19 +22,24 @@ def format_hostname ( hostname, options )
   options[:reverse_hostname] ? hn.reverse : hn.to_s
 end
 
-#format the stats in a way that graphite expects
-def format_stats ( allstats, options )
-  carbon_prefix = options[:carbon_prefix]
-  stats = {}
-  allstats.each do |server,server_stats|
-    server_split = server.split(':')
-    server_piece = sprintf("%s.port_%s", 
-                           format_hostname(server_split[0], options),
-                           server_split[1] || 11211 )
+def get_stats_slabs (host, port)
+  Hash[MemcacheDo.exec('stats slabs',host,port).gsub(/^STAT (\d+):/,'STAT slab_\1.').scan(/^STAT (.*?) (.*)\r$/)]
+end
 
-    prefix = [carbon_prefix, server_piece].join('.')
-    stats.merge! server_stats.prefix_keys("#{prefix}.")
-  end
+def get_stats (host, port)
+  Hash[MemcacheDo.exec('stats',host,port).scan(/^STAT (.*?) (.*)\r$/)]
+end
+
+#format the stats in a way that graphite expects
+def format_stats ( server_stats, host = 'localhost', port = 11211, options = {} )
+  stats = {}
+  carbon_prefix = options[:carbon_prefix]
+  server_piece = sprintf("%s.port_%s", 
+                         format_hostname(host, options),
+                         port)
+
+  prefix = [carbon_prefix, server_piece].join('.')
+  stats.merge! server_stats.prefix_keys("#{prefix}.")
 
 # only return numeric values
 # & convert to floats
@@ -82,9 +87,20 @@ opts.on("-h", "--help", "help" ) do |v|
 end
 opts.parse!
 
-Dalli.logger = logger
-dc = Dalli::Client.new options[:memcached_servers]
-g  = Graphite::Logger.new(options[:carbon_server], logger)
+g = Graphite::Logger.new(options[:carbon_server], logger)
 
-stats = format_stats(dc.stats, options)
-g.log(Time.now.to_i, stats)
+options[:memcached_servers].each do |server|
+  stats = {}
+  host,port = server.split(':')  
+  host ||= 'localhost'
+  port ||= 11211
+
+  stats = get_stats(host,port)
+  stats.merge! get_stats_slabs(host,port)
+  stats = format_stats(stats, host, port, options)
+
+  pp stats
+#  g.log(Time.now.to_i, stats)
+end
+
+
