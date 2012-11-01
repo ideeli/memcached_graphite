@@ -23,7 +23,7 @@ def format_hostname ( hostname, options )
 end
 
 def get_stats_items (host, port)
-  Hash[MemcacheDo.exec('stats items').gsub(/^STAT items:(\d+):/,'STAT items_\1.').scan(/^STAT (.*?) (.*)\r$/)]
+  Hash[MemcacheDo.exec('stats items',host,port).gsub(/^STAT items:(\d+):/,'STAT items_\1.').scan(/^STAT (.*?) (.*)\r$/)]
 end
 
 def get_stats_slabs (host, port)
